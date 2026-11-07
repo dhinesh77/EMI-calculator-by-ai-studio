@@ -26,10 +26,13 @@ This repository is pre-configured with an automated **GitHub Actions Android APK
 
 ## 🌐 Live Public PWA (GitHub Pages)
 
+The repository automatically builds and pushes the production web app to the `gh-pages` branch.
+
 1. In your GitHub repository, go to **Settings → Pages**.
-2. Under **Build and deployment → Source**, select **GitHub Actions**.
-3. Your live app will automatically deploy to `https://<your-github-username>.github.io/<repo-name>/`.
-4. You can open this link directly on Android/iOS to install the PWA or paste it into [PWABuilder.com](https://www.pwabuilder.com).
+2. Under **Build and deployment → Branch**, choose `gh-pages` / `(root)`.
+3. Your live app will be accessible at:
+   `https://<your-github-username>.github.io/<repo-name>/`
+4. You can also download the pre-compiled web app bundle directly from the **Actions → Deploy to GitHub Pages → Artifacts (`EMI-Planner-Web-Build`)**.
 
 ---
 
