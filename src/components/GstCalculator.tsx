@@ -3,6 +3,8 @@ import { Percent, Info, Copy, Check, Save } from 'lucide-react';
 import { calculateGST } from '../utils/financeCalculations';
 import { Currency, SavedCalculation } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { formatIndianCurrency, formatIndianCompact, numberToIndianWords } from '../utils/indianNumberFormat';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface GstCalculatorProps {
   currency: Currency;
@@ -12,7 +14,7 @@ interface GstCalculatorProps {
 }
 
 export default function GstCalculator({ currency, onSaveCalculation, loadedItem, onClearLoadedItem }: GstCalculatorProps) {
-  const [amount, setAmount] = useState<number>(10000);
+  const [amount, setAmount] = useState<number>(25000);
   const [gstRate, setGstRate] = useState<number>(18);
   const [isInclusive, setIsInclusive] = useState<boolean>(false);
   const [copied, setCopied] = useState(false);
@@ -32,25 +34,24 @@ export default function GstCalculator({ currency, onSaveCalculation, loadedItem,
 
   const result = calculateGST(amount, gstRate, isInclusive);
 
-  // Formats currency nicely
-  const formatVal = (val: number) => {
-    return currency.symbol + ' ' + val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+  const formatVal = (val: number) => formatIndianCurrency(val);
 
-  const handleCopy = () => {
-    const text = `--- GST Calculation ---
-Initial Amount: ${formatVal(amount)}
-GST Rate: ${gstRate}% (${isInclusive ? 'Inclusive' : 'Exclusive'})
+  const handleCopy = async () => {
+    const text = `--- GST Calculation (INR) ---
+Base Amount: ${formatVal(amount)} (${numberToIndianWords(amount)} Rupees)
+GST Slab: ${gstRate}% (${isInclusive ? 'Tax Inclusive' : 'Tax Exclusive'})
 ------------------------
 Pre-Tax Net Amount: ${formatVal(result.originalAmount)}
 GST Tax Amount: ${formatVal(result.gstAmount)}
-  - CGST (50%): ${formatVal(result.cgst)}
-  - SGST (50%): ${formatVal(result.sgst)}
-Total Gross Amount: ${formatVal(result.finalAmount)}`;
+  - CGST (Central): ${formatVal(result.cgst)}
+  - SGST (State): ${formatVal(result.sgst)}
+Total Gross Amount: ${formatVal(result.finalAmount)} (${formatIndianCompact(result.finalAmount)})`;
 
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const success = await copyToClipboard(text);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const handleSave = () => {
@@ -65,28 +66,37 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
     setShowSaveModal(false);
   };
 
-  // Pie chart data (using theme colors purple and indigo)
+  // Pie chart data with creative emerald and cyan
   const chartData = [
-    { name: 'Net Price (Pre-Tax)', value: result.originalAmount, color: '#c084fc' },
-    { name: 'GST Tax', value: result.gstAmount, color: '#818cf8' },
+    { name: 'Net Price (Pre-Tax)', value: result.originalAmount, color: '#10b981' },
+    { name: 'GST Tax', value: result.gstAmount, color: '#06b6d4' },
   ];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" id="gst-calculator-main">
       {/* Input panel */}
-      <div className="lg:col-span-7 glass rounded-2xl p-6 flex flex-col justify-between" id="gst-inputs-card">
+      <div className="lg:col-span-7 glass-creative rounded-2xl p-6 flex flex-col justify-between border border-white/10" id="gst-inputs-card">
         <div>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Percent size={18} className="text-indigo-400" />
-              GST Calculator
-            </h3>
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Percent size={18} className="text-emerald-400" />
+                  Indian Goods & Services Tax (GST)
+                </h3>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full">
+                  INR
+                </span>
+              </div>
+              <p className="text-xs text-white/60">Calculate CGST, SGST, and net/gross invoice totals</p>
+            </div>
+
             <button
               id="gst-btn-inclusive-toggle"
               onClick={() => setIsInclusive(!isInclusive)}
               className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                 isInclusive
-                  ? 'accent-pill text-white shadow shadow-indigo-500/10'
+                  ? 'accent-pill text-white shadow shadow-emerald-500/20'
                   : 'glass-dark text-white/50 border border-white/5 hover:bg-white/5 hover:text-white'
               }`}
             >
@@ -96,39 +106,48 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
 
           <div className="space-y-6">
             {/* Amount */}
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <div className="flex justify-between items-center">
-                <label className="text-sm font-semibold text-white/80">Base Amount</label>
+                <label className="text-sm font-semibold text-white/90">Transaction Amount</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">{currency.symbol}</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-bold">₹</span>
                   <input
                     id="gst-amount-input"
                     type="number"
                     value={amount}
                     onChange={(e) => setAmount(Math.max(0, parseFloat(e.target.value) || 0))}
-                    className="w-36 pl-8 pr-3 py-1 bg-black/20 border border-white/10 rounded-xl text-white font-bold focus:outline-none focus:border-indigo-500 text-right text-sm"
+                    className="w-40 pl-8 pr-3 py-1.5 bg-black/30 border border-white/10 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-emerald-500 text-right text-sm"
                   />
                 </div>
               </div>
+
+              {/* Verbal Representation in Indian Units */}
+              <div className="flex justify-between text-xs text-white/60 bg-white/5 p-2 rounded-xl border border-white/5">
+                <span className="font-bold text-emerald-400 font-mono">{formatIndianCurrency(amount)} ({formatIndianCompact(amount)})</span>
+                <span className="italic text-[11px] truncate max-w-[200px]">{numberToIndianWords(amount)} Rupees</span>
+              </div>
+
               <input
                 id="gst-amount-slider"
                 type="range"
-                min="100"
+                min="500"
                 max="1000000"
                 step="500"
                 value={amount}
                 onChange={(e) => setAmount(parseFloat(e.target.value))}
-                className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
               />
-              <div className="flex justify-between text-[11px] text-white/40">
-                <span>{currency.symbol}100</span>
-                <span>{currency.symbol}1,000,000</span>
+              <div className="flex justify-between text-[11px] text-white/40 font-mono">
+                <span>₹ 500</span>
+                <span>₹ 2.5 Lakh</span>
+                <span>₹ 5 Lakh</span>
+                <span>₹ 10 Lakh</span>
               </div>
             </div>
 
-            {/* GST Rate Preset Buttons */}
+            {/* GST Rate Preset Buttons (Official Indian GST Slabs: 0%, 5%, 12%, 18%, 28%) */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-white/80">GST Rate (%)</label>
+              <label className="text-sm font-semibold text-white/80">Standard Indian GST Slabs (%)</label>
               <div className="grid grid-cols-5 gap-2">
                 {[5, 12, 18, 28].map((rate) => (
                   <button
@@ -137,7 +156,7 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
                     onClick={() => setGstRate(rate)}
                     className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       gstRate === rate
-                        ? 'accent-pill text-white shadow-lg shadow-indigo-500/20'
+                        ? 'accent-pill text-white shadow-lg shadow-emerald-500/20'
                         : 'glass-dark text-white/50 border border-white/5 hover:bg-white/5 hover:text-white'
                     }`}
                   >
@@ -151,7 +170,7 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
                     placeholder="Custom"
                     value={gstRate}
                     onChange={(e) => setGstRate(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
-                    className="w-full py-2 bg-black/20 border border-white/10 rounded-xl text-center text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
+                    className="w-full py-2 bg-black/30 border border-white/10 rounded-xl text-center text-white font-mono text-xs font-bold focus:outline-none focus:border-emerald-500"
                   />
                   <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40">%</span>
                 </div>
@@ -164,15 +183,16 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
                 id="gst-rate-slider"
                 type="range"
                 min="0"
-                max="50"
+                max="40"
                 step="0.5"
                 value={gstRate}
                 onChange={(e) => setGstRate(parseFloat(e.target.value))}
-                className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
               />
-              <div className="flex justify-between text-[11px] text-white/40 mt-1">
-                <span>0%</span>
-                <span>50%</span>
+              <div className="flex justify-between text-[11px] text-white/40 font-mono mt-1">
+                <span>0% (Exempt)</span>
+                <span>18% (Standard)</span>
+                <span>40% (Max)</span>
               </div>
             </div>
           </div>
@@ -187,7 +207,7 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
           >
             {copied ? (
               <>
-                <Check size={16} className="text-indigo-400 animate-scaleIn" />
+                <Check size={16} className="text-emerald-400" />
                 Copied!
               </>
             ) : (
@@ -201,7 +221,7 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
           <button
             id="gst-btn-save-trigger"
             onClick={() => setShowSaveModal(true)}
-            className="flex-1 py-2.5 accent-pill text-white font-bold rounded-xl hover:shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20 cursor-pointer"
+            className="flex-1 py-2.5 accent-pill text-white font-bold rounded-xl hover:shadow-lg hover:shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-emerald-500/20 cursor-pointer"
           >
             <Save size={16} />
             Save Calculation
@@ -211,46 +231,54 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
 
       {/* Results panel */}
       <div className="lg:col-span-5 flex flex-col gap-6" id="gst-results-panel">
-        <div className="glass rounded-2xl p-6 shadow-xl" id="gst-summary-card">
-          <h4 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-4">Calculation Summary</h4>
+        <div className="glass-creative rounded-2xl p-6 shadow-xl border border-white/10" id="gst-summary-card">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Calculation Summary (INR)</h4>
+            <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded-full text-white/60">
+              Tax Split
+            </span>
+          </div>
 
           <div className="space-y-4">
             <div className="flex justify-between items-center py-2 border-b border-white/5">
-              <span className="text-sm text-white/50">Pre-Tax Amount (Net)</span>
-              <span className="font-semibold text-white">{formatVal(result.originalAmount)}</span>
+              <span className="text-sm text-white/60">Pre-Tax Amount (Net)</span>
+              <span className="font-semibold text-white font-mono">{formatVal(result.originalAmount)}</span>
             </div>
 
             <div className="flex justify-between items-center py-2 border-b border-white/5">
-              <span className="text-sm text-white/50 flex items-center gap-1.5">
+              <span className="text-sm text-white/60 flex items-center gap-1.5">
                 GST Tax Amount
-                <span className="text-[10px] bg-white/15 text-white px-1.5 py-0.5 rounded font-bold">
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-bold">
                   {gstRate}%
                 </span>
               </span>
-              <span className="font-semibold text-indigo-400">{formatVal(result.gstAmount)}</span>
+              <span className="font-semibold text-cyan-400 font-mono">{formatVal(result.gstAmount)}</span>
             </div>
 
             {/* Split */}
-            <div className="pl-4 border-l-2 border-white/10 py-1 space-y-1.5 text-xs text-white/50">
+            <div className="pl-4 border-l-2 border-emerald-500/30 py-1 space-y-1.5 text-xs text-white/60 font-mono">
               <div className="flex justify-between">
                 <span>Central GST (CGST - 50%)</span>
-                <span>{formatVal(result.cgst)}</span>
+                <span className="text-white/90">{formatVal(result.cgst)}</span>
               </div>
               <div className="flex justify-between">
                 <span>State GST (SGST - 50%)</span>
-                <span>{formatVal(result.sgst)}</span>
+                <span className="text-white/90">{formatVal(result.sgst)}</span>
               </div>
             </div>
 
-            <div className="flex justify-between items-center py-3 accent-pill rounded-xl px-4 mt-4 shadow-md shadow-indigo-500/20 border-t border-white/10">
-              <span className="text-sm font-bold text-white/80">Gross Price (Total)</span>
-              <span className="text-xl font-black text-white">{formatVal(result.finalAmount)}</span>
+            <div className="flex justify-between items-center py-3.5 accent-pill rounded-xl px-4 mt-4 shadow-md shadow-emerald-500/20 border-t border-white/10">
+              <div>
+                <span className="text-xs font-bold text-white/80 block">Gross Total Invoice</span>
+                <span className="text-[10px] text-white/70">{formatIndianCompact(result.finalAmount)}</span>
+              </div>
+              <span className="text-xl font-black text-white font-mono">{formatVal(result.finalAmount)}</span>
             </div>
           </div>
         </div>
 
         {/* Mini Doughnut Chart */}
-        <div className="glass rounded-2xl p-6 flex flex-col justify-center items-center h-52 shadow-xl">
+        <div className="glass-creative rounded-2xl p-6 flex flex-col justify-center items-center h-52 shadow-xl border border-white/10">
           {result.gstAmount > 0 ? (
             <div className="w-full h-full flex flex-row items-center justify-between">
               <div className="w-[120px] h-[120px]">
@@ -271,7 +299,7 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
                     </Pie>
                     <Tooltip
                       formatter={(value: number) => [formatVal(value), '']}
-                      contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(255, 255, 255, 0.1)', borderRadius: '8px' }}
+                      contentStyle={{ backgroundColor: 'rgba(3, 7, 18, 0.95)', borderColor: 'rgba(255, 255, 255, 0.1)', borderRadius: '8px' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -280,8 +308,8 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
                 {chartData.map((entry) => (
                   <div key={entry.name} className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
-                    <span className="text-white/50">{entry.name}:</span>
-                    <span className="font-bold text-white">
+                    <span className="text-white/60">{entry.name}:</span>
+                    <span className="font-bold text-white font-mono">
                       {((entry.value / result.finalAmount) * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -291,7 +319,7 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
           ) : (
             <div className="text-center text-white/40 text-xs">
               <Info size={24} className="mx-auto mb-2 text-white/30" />
-              Increase tax rate to view chart distribution
+              Adjust tax rate to view chart distribution
             </div>
           )}
         </div>
@@ -299,17 +327,17 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
 
       {/* Save Modal */}
       {showSaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm px-4">
-          <div className="glass rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scaleIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="glass-creative rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/10 animate-scaleIn">
             <h3 className="text-lg font-bold text-white mb-2">Save GST Calculation</h3>
             <p className="text-sm text-white/60 mb-4">Give your calculation a clear name to reload it later from Saved Calculations.</p>
             <input
               id="gst-save-name-input"
               type="text"
-              placeholder="e.g. Macbook Pro GST, Office Stationery"
+              placeholder="e.g. Dell Laptop Purchase, Consulting Invoice"
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
-              className="w-full px-4 py-2.5 bg-black/20 border border-white/15 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 text-sm mb-6"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-sm mb-6"
               autoFocus
             />
             <div className="flex gap-3 justify-end">
@@ -324,7 +352,7 @@ Total Gross Amount: ${formatVal(result.finalAmount)}`;
                 id="gst-modal-save"
                 onClick={handleSave}
                 disabled={!saveName.trim()}
-                className="px-5 py-2 accent-pill text-white font-bold rounded-xl hover:shadow-lg hover:shadow-indigo-500/25 disabled:opacity-50 text-sm transition-all cursor-pointer"
+                className="px-5 py-2 accent-pill text-white font-bold rounded-xl hover:shadow-lg hover:shadow-emerald-500/25 disabled:opacity-50 text-sm transition-all cursor-pointer"
               >
                 Save
               </button>

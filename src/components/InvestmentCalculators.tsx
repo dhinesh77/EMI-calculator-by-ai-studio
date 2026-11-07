@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, Coins, Landmark, Calendar, Save, Copy, Check, Info } from 'lucide-react';
+import { TrendingUp, Coins, Landmark, Calendar, Save, Copy, Check, Info, Sparkles } from 'lucide-react';
 import { calculateSIP, calculateFD, calculateRD } from '../utils/financeCalculations';
 import { Currency, SavedCalculation } from '../types';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { formatIndianCurrency, formatIndianCompact, numberToIndianWords } from '../utils/indianNumberFormat';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface InvestmentCalculatorsProps {
   currency: Currency;
@@ -19,20 +21,20 @@ export default function InvestmentCalculators({ currency, onSaveCalculation, loa
   const [saveName, setSaveName] = useState('');
   const [showSaveModal, setShowSaveModal] = useState(false);
 
-  // Common/Calculators states
+  // Common/Calculators states in Indian standards
   // SIP States
-  const [sipMonthly, setSipMonthly] = useState<number>(500);
+  const [sipMonthly, setSipMonthly] = useState<number>(10000);
   const [sipRate, setSipRate] = useState<number>(12);
   const [sipYears, setSipYears] = useState<number>(15);
 
-  // FD States
-  const [fdPrincipal, setFdPrincipal] = useState<number>(10000);
-  const [fdRate, setFdRate] = useState<number>(6.5);
+  // FD States (e.g. 5 Lakhs)
+  const [fdPrincipal, setFdPrincipal] = useState<number>(500000);
+  const [fdRate, setFdRate] = useState<number>(7.1);
   const [fdYears, setFdYears] = useState<number>(5);
   const [fdCompounding, setFdCompounding] = useState<number>(4); // Quarterly default
 
-  // RD States
-  const [rdMonthly, setRdMonthly] = useState<number>(300);
+  // RD States (e.g. 5,000 / month)
+  const [rdMonthly, setRdMonthly] = useState<number>(5000);
   const [rdRate, setRdRate] = useState<number>(6.8);
   const [rdYears, setRdYears] = useState<number>(3);
 
@@ -66,31 +68,29 @@ export default function InvestmentCalculators({ currency, onSaveCalculation, loa
   const fdResult = calculateFD(fdPrincipal, fdRate, fdYears, fdCompounding);
   const rdResult = calculateRD(rdMonthly, rdRate, rdYears);
 
-  const formatVal = (val: number) => {
-    return currency.symbol + ' ' + Math.round(val).toLocaleString();
-  };
+  const formatVal = (val: number) => formatIndianCurrency(val);
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     let text = '';
     if (activeTab === 'sip') {
-      text = `--- SIP PLANNER SUMMARY ---
-Monthly SIP Deposit: ${formatVal(sipMonthly)}
+      text = `--- SIP WEALTH PLANNER (INDIAN FORMAT) ---
+Monthly SIP Deposit: ${formatVal(sipMonthly)} (${numberToIndianWords(sipMonthly)} Rupees)
 Expected Return Rate: ${sipRate}% p.a.
 Period: ${sipYears} Years
 ---------------------------
 Total Invested Amount: ${formatVal(sipResult.investedAmount)}
 Wealth Gained (Returns): ${formatVal(sipResult.estReturns)}
-Maturity Value: ${formatVal(sipResult.totalValue)}`;
+Maturity Value: ${formatVal(sipResult.totalValue)} (${formatIndianCompact(sipResult.totalValue)})`;
     } else if (activeTab === 'fd') {
       text = `--- FIXED DEPOSIT (FD) SUMMARY ---
-FD Deposit Amount: ${formatVal(fdPrincipal)}
+FD Deposit Amount: ${formatVal(fdPrincipal)} (${formatIndianCompact(fdPrincipal)})
 Interest Rate: ${fdRate}% p.a.
 Period: ${fdYears} Years
 Compounding: ${fdCompounding === 12 ? 'Monthly' : fdCompounding === 4 ? 'Quarterly' : fdCompounding === 2 ? 'Half-Yearly' : 'Yearly'}
 ---------------------------
 Total Invested Amount: ${formatVal(fdResult.investedAmount)}
 Estimated Interest Earned: ${formatVal(fdResult.estInterest)}
-Total Maturity Value: ${formatVal(fdResult.maturityValue)}`;
+Total Maturity Value: ${formatVal(fdResult.maturityValue)} (${formatIndianCompact(fdResult.maturityValue)})`;
     } else {
       text = `--- RECURRING DEPOSIT (RD) SUMMARY ---
 Monthly RD Deposit: ${formatVal(rdMonthly)}
@@ -99,65 +99,37 @@ Period: ${rdYears} Years
 ---------------------------
 Total Invested Amount: ${formatVal(rdResult.investedAmount)}
 Estimated Interest Earned: ${formatVal(rdResult.estInterest)}
-Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
+Total Maturity Value: ${formatVal(rdResult.maturityValue)} (${formatIndianCompact(rdResult.maturityValue)})`;
     }
 
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const success = await copyToClipboard(text);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const handleSave = () => {
     if (!saveName.trim()) return;
-    
-    let saveData: any = {};
+    let data: any = {};
     if (activeTab === 'sip') {
-      saveData = { sipMonthly, sipRate, sipYears, result: sipResult };
+      data = { sipMonthly, sipRate, sipYears, result: sipResult };
     } else if (activeTab === 'fd') {
-      saveData = { fdPrincipal, fdRate, fdYears, fdCompounding, result: fdResult };
+      data = { fdPrincipal, fdRate, fdYears, fdCompounding, result: fdResult };
     } else {
-      saveData = { rdMonthly, rdRate, rdYears, result: rdResult };
+      data = { rdMonthly, rdRate, rdYears, result: rdResult };
     }
-
-    onSaveCalculation(saveName, {
-      investmentType: activeTab,
-      ...saveData,
-    });
-    
+    onSaveCalculation(saveName, data);
     setSaveName('');
     setShowSaveModal(false);
   };
 
-  // Select result variables based on active calculator tab and unify property names
-  const investedAmount =
-    activeTab === 'sip'
-      ? sipResult.investedAmount
-      : activeTab === 'fd'
-      ? fdResult.investedAmount
-      : rdResult.investedAmount;
-
-  const estReturns =
-    activeTab === 'sip'
-      ? sipResult.estReturns
-      : activeTab === 'fd'
-      ? fdResult.estInterest
-      : rdResult.estInterest;
-
-  const totalValue =
-    activeTab === 'sip'
-      ? sipResult.totalValue
-      : activeTab === 'fd'
-      ? fdResult.maturityValue
-      : rdResult.maturityValue;
-
-  const progressData =
-    activeTab === 'sip'
-      ? sipResult.yearlyProgress
-      : activeTab === 'fd'
-      ? fdResult.yearlyProgress
-      : rdResult.yearlyProgress;
-
-  const chartData = progressData.map((p: any) => ({
+  // Selected result based on tab
+  const investedAmount = activeTab === 'sip' ? sipResult.investedAmount : activeTab === 'fd' ? fdResult.investedAmount : rdResult.investedAmount;
+  const estReturns = activeTab === 'sip' ? sipResult.estReturns : activeTab === 'fd' ? fdResult.estInterest : rdResult.estInterest;
+  const totalValue = activeTab === 'sip' ? sipResult.totalValue : activeTab === 'fd' ? fdResult.maturityValue : rdResult.maturityValue;
+  const rawProgress = activeTab === 'sip' ? sipResult.yearlyProgress : activeTab === 'fd' ? fdResult.yearlyProgress : rdResult.yearlyProgress;
+  const chartData = (rawProgress || []).map((p: any) => ({
     year: p.year,
     invested: p.invested,
     returns: p.returns !== undefined ? p.returns : p.interest,
@@ -165,18 +137,34 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
   }));
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" id="investments-container">
-      {/* Sub-tabs & inputs */}
-      <div className="lg:col-span-7 glass rounded-2xl p-6 flex flex-col justify-between" id="investment-inputs-panel">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" id="investment-calculators-main">
+      {/* Left Column: Switcher & Configuration Inputs */}
+      <div className="lg:col-span-7 glass-creative rounded-2xl p-6 flex flex-col justify-between border border-white/10" id="investment-inputs-card">
         <div>
-          {/* Planner Selector */}
-          <div className="flex glass-dark p-1 rounded-xl gap-1 mb-8" id="investment-type-switcher">
+          {/* Header */}
+          <div className="mb-6 pb-4 border-b border-white/10 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <TrendingUp size={20} className="text-emerald-400" />
+                  Investment & Growth Planners
+                </h3>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full">
+                  INR Format
+                </span>
+              </div>
+              <p className="text-xs text-white/60">Calculate compounding returns for Systematic Investment, FD, & RD</p>
+            </div>
+          </div>
+
+          {/* Calculator Selector Tabs */}
+          <div className="flex glass-dark p-1 rounded-xl mb-6 border border-white/5" id="investment-tabs">
             <button
               id="tab-sip"
               onClick={() => setActiveTab('sip')}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'sip'
-                  ? 'accent-pill text-white shadow-md shadow-indigo-500/20'
+                  ? 'accent-pill text-white shadow-md shadow-emerald-500/20'
                   : 'text-white/40 hover:text-white/70'
               }`}
             >
@@ -188,7 +176,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
               onClick={() => setActiveTab('fd')}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'fd'
-                  ? 'accent-pill text-white shadow-md shadow-indigo-500/20'
+                  ? 'accent-pill text-white shadow-md shadow-emerald-500/20'
                   : 'text-white/40 hover:text-white/70'
               }`}
             >
@@ -200,7 +188,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
               onClick={() => setActiveTab('rd')}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'rd'
-                  ? 'accent-pill text-white shadow-md shadow-indigo-500/20'
+                  ? 'accent-pill text-white shadow-md shadow-emerald-500/20'
                   : 'text-white/40 hover:text-white/70'
               }`}
             >
@@ -214,33 +202,60 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
             {activeTab === 'sip' && (
               <>
                 {/* Monthly SIP Amount */}
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-semibold text-white/80">Monthly SIP Amount</label>
+                    <label className="text-sm font-semibold text-white/90">Monthly SIP Investment</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">{currency.symbol}</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-bold">₹</span>
                       <input
                         id="sip-amount-input"
                         type="number"
                         value={sipMonthly}
                         onChange={(e) => setSipMonthly(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-32 pl-8 pr-3 py-1 bg-black/20 border border-white/10 rounded-xl text-white font-bold focus:outline-none focus:border-indigo-500 text-right text-sm"
+                        className="w-36 pl-8 pr-3 py-1.5 bg-black/30 border border-white/10 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-emerald-500 text-right text-sm"
                       />
                     </div>
                   </div>
+                  
+                  {/* Verbal display */}
+                  <div className="flex justify-between text-xs text-white/60 bg-white/5 p-2 rounded-xl border border-white/5">
+                    <span className="font-bold text-emerald-400 font-mono">{formatIndianCurrency(sipMonthly)}/mo</span>
+                    <span className="italic text-[11px] truncate max-w-[200px]">{numberToIndianWords(sipMonthly)} Rupees</span>
+                  </div>
+
                   <input
                     id="sip-amount-slider"
                     type="range"
-                    min="10"
-                    max="10000"
-                    step="50"
+                    min="500"
+                    max="150000"
+                    step="500"
                     value={sipMonthly}
                     onChange={(e) => setSipMonthly(parseInt(e.target.value))}
-                    className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                    className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-white/40">
-                    <span>{currency.symbol}10</span>
-                    <span>{currency.symbol}10,000</span>
+                  <div className="flex justify-between text-[10px] text-white/40 font-mono">
+                    <span>₹ 500</span>
+                    <span>₹ 25,000</span>
+                    <span>₹ 50,000</span>
+                    <span>₹ 1.5 Lakh</span>
+                  </div>
+
+                  {/* Preset quick chips */}
+                  <div className="flex gap-1.5 flex-wrap pt-1">
+                    {[2500, 5000, 10000, 25000, 50000].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setSipMonthly(amt)}
+                        className={`px-2 py-1 text-[10px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                          sipMonthly === amt
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'glass-dark text-white/50 border-white/5 hover:text-white'
+                        }`}
+                      >
+                        {formatIndianCompact(amt)}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -255,7 +270,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                         step="0.1"
                         value={sipRate}
                         onChange={(e) => setSipRate(Math.max(0, parseFloat(e.target.value) || 0))}
-                        className="w-24 px-3 py-1 bg-black/20 border border-white/10 rounded-xl text-white font-bold focus:outline-none focus:border-indigo-500 text-right text-sm"
+                        className="w-24 px-3 py-1 bg-black/30 border border-white/10 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-emerald-500 text-right text-sm"
                       />
                       <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 text-xs font-bold">%</span>
                     </div>
@@ -268,10 +283,11 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                     step="0.5"
                     value={sipRate}
                     onChange={(e) => setSipRate(parseFloat(e.target.value))}
-                    className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                    className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-white/40">
+                  <div className="flex justify-between text-[10px] text-white/40 font-mono">
                     <span>1%</span>
+                    <span>12% (Equity MF Avg)</span>
                     <span>30%</span>
                   </div>
                 </div>
@@ -286,7 +302,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                         type="number"
                         value={sipYears}
                         onChange={(e) => setSipYears(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-20 px-3 py-1 bg-black/20 border border-white/10 rounded-xl text-white font-bold focus:outline-none focus:border-indigo-500 text-right text-sm"
+                        className="w-20 px-3 py-1 bg-black/30 border border-white/10 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-emerald-500 text-right text-sm"
                       />
                       <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-bold">Yrs</span>
                     </div>
@@ -299,10 +315,11 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                     step="1"
                     value={sipYears}
                     onChange={(e) => setSipYears(parseInt(e.target.value))}
-                    className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                    className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-white/40">
+                  <div className="flex justify-between text-[10px] text-white/40 font-mono">
                     <span>1 Year</span>
+                    <span>15 Years</span>
                     <span>40 Years</span>
                   </div>
                 </div>
@@ -312,33 +329,41 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
             {activeTab === 'fd' && (
               <>
                 {/* FD Principal */}
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-semibold text-white/80">Lump Sum Deposit</label>
+                    <label className="text-sm font-semibold text-white/90">Lump Sum Deposit</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">{currency.symbol}</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-bold">₹</span>
                       <input
                         id="fd-amount-input"
                         type="number"
                         value={fdPrincipal}
                         onChange={(e) => setFdPrincipal(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-32 pl-8 pr-3 py-1 bg-black/20 border border-white/10 rounded-xl text-white font-bold focus:outline-none focus:border-indigo-500 text-right text-sm"
+                        className="w-40 pl-8 pr-3 py-1.5 bg-black/30 border border-white/10 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-emerald-500 text-right text-sm"
                       />
                     </div>
                   </div>
+
+                  <div className="flex justify-between text-xs text-white/60 bg-white/5 p-2 rounded-xl border border-white/5">
+                    <span className="font-bold text-emerald-400 font-mono">{formatIndianCurrency(fdPrincipal)} ({formatIndianCompact(fdPrincipal)})</span>
+                    <span className="italic text-[11px] truncate max-w-[200px]">{numberToIndianWords(fdPrincipal)} Rupees</span>
+                  </div>
+
                   <input
                     id="fd-amount-slider"
                     type="range"
-                    min="500"
-                    max="100000"
-                    step="500"
+                    min="10000"
+                    max="10000000"
+                    step="10000"
                     value={fdPrincipal}
                     onChange={(e) => setFdPrincipal(parseInt(e.target.value))}
-                    className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                    className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-white/40">
-                    <span>{currency.symbol}500</span>
-                    <span>{currency.symbol}100,000</span>
+                  <div className="flex justify-between text-[10px] text-white/40 font-mono">
+                    <span>₹ 10,000</span>
+                    <span>₹ 10 Lakh</span>
+                    <span>₹ 50 Lakh</span>
+                    <span>₹ 1 Crore</span>
                   </div>
                 </div>
 
@@ -353,7 +378,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                         step="0.1"
                         value={fdRate}
                         onChange={(e) => setFdRate(Math.max(0, parseFloat(e.target.value) || 0))}
-                        className="w-24 px-3 py-1 bg-black/20 border border-white/10 rounded-xl text-white font-bold focus:outline-none focus:border-indigo-500 text-right text-sm"
+                        className="w-24 px-3 py-1 bg-black/30 border border-white/10 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-emerald-500 text-right text-sm"
                       />
                       <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 text-xs font-bold">%</span>
                     </div>
@@ -366,10 +391,11 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                     step="0.1"
                     value={fdRate}
                     onChange={(e) => setFdRate(parseFloat(e.target.value))}
-                    className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                    className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-white/40">
+                  <div className="flex justify-between text-[10px] text-white/40 font-mono">
                     <span>1%</span>
+                    <span>7.1% (Bank FD Avg)</span>
                     <span>15%</span>
                   </div>
                 </div>
@@ -384,7 +410,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                         type="number"
                         value={fdYears}
                         onChange={(e) => setFdYears(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-20 px-3 py-1 bg-black/20 border border-white/10 rounded-xl text-white font-bold focus:outline-none focus:border-indigo-500 text-right text-sm"
+                        className="w-20 px-3 py-1 bg-black/30 border border-white/10 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-emerald-500 text-right text-sm"
                       />
                       <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-bold">Yrs</span>
                     </div>
@@ -397,10 +423,11 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                     step="1"
                     value={fdYears}
                     onChange={(e) => setFdYears(parseInt(e.target.value))}
-                    className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                    className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-white/40">
+                  <div className="flex justify-between text-[10px] text-white/40 font-mono">
                     <span>1 Year</span>
+                    <span>5 Years</span>
                     <span>25 Years</span>
                   </div>
                 </div>
@@ -421,7 +448,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                         onClick={() => setFdCompounding(comp.val)}
                         className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           fdCompounding === comp.val
-                            ? 'accent-pill text-white shadow shadow-indigo-500/10'
+                            ? 'accent-pill text-white shadow shadow-emerald-500/10'
                             : 'glass-dark text-white/50 border border-white/5 hover:bg-white/5 hover:text-white'
                         }`}
                       >
@@ -436,33 +463,40 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
             {activeTab === 'rd' && (
               <>
                 {/* Monthly RD Investment */}
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-semibold text-white/80">Monthly RD Contribution</label>
+                    <label className="text-sm font-semibold text-white/90">Monthly RD Contribution</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">{currency.symbol}</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400 font-bold">₹</span>
                       <input
                         id="rd-amount-input"
                         type="number"
                         value={rdMonthly}
                         onChange={(e) => setRdMonthly(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-32 pl-8 pr-3 py-1 bg-black/20 border border-white/10 rounded-xl text-white font-bold focus:outline-none focus:border-indigo-500 text-right text-sm"
+                        className="w-36 pl-8 pr-3 py-1.5 bg-black/30 border border-white/10 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-emerald-500 text-right text-sm"
                       />
                     </div>
                   </div>
+
+                  <div className="flex justify-between text-xs text-white/60 bg-white/5 p-2 rounded-xl border border-white/5">
+                    <span className="font-bold text-emerald-400 font-mono">{formatIndianCurrency(rdMonthly)}/mo</span>
+                    <span className="italic text-[11px] truncate max-w-[200px]">{numberToIndianWords(rdMonthly)} Rupees</span>
+                  </div>
+
                   <input
                     id="rd-amount-slider"
                     type="range"
-                    min="10"
-                    max="5000"
-                    step="50"
+                    min="500"
+                    max="100000"
+                    step="500"
                     value={rdMonthly}
                     onChange={(e) => setRdMonthly(parseInt(e.target.value))}
-                    className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                    className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-white/40">
-                    <span>{currency.symbol}10</span>
-                    <span>{currency.symbol}5,005</span>
+                  <div className="flex justify-between text-[10px] text-white/40 font-mono">
+                    <span>₹ 500</span>
+                    <span>₹ 25,000</span>
+                    <span>₹ 1 Lakh</span>
                   </div>
                 </div>
 
@@ -477,7 +511,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                         step="0.1"
                         value={rdRate}
                         onChange={(e) => setRdRate(Math.max(0, parseFloat(e.target.value) || 0))}
-                        className="w-24 px-3 py-1 bg-black/20 border border-white/10 rounded-xl text-white font-bold focus:outline-none focus:border-indigo-500 text-right text-sm"
+                        className="w-24 px-3 py-1 bg-black/30 border border-white/10 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-emerald-500 text-right text-sm"
                       />
                       <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 text-xs font-bold">%</span>
                     </div>
@@ -490,10 +524,11 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                     step="0.1"
                     value={rdRate}
                     onChange={(e) => setRdRate(parseFloat(e.target.value))}
-                    className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                    className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-white/40">
+                  <div className="flex justify-between text-[10px] text-white/40 font-mono">
                     <span>1%</span>
+                    <span>6.8%</span>
                     <span>15%</span>
                   </div>
                 </div>
@@ -508,7 +543,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                         type="number"
                         value={rdYears}
                         onChange={(e) => setRdYears(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-20 px-3 py-1 bg-black/20 border border-white/10 rounded-xl text-white font-bold focus:outline-none focus:border-indigo-500 text-right text-sm"
+                        className="w-20 px-3 py-1 bg-black/30 border border-white/10 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-emerald-500 text-right text-sm"
                       />
                       <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-bold">Yrs</span>
                     </div>
@@ -521,10 +556,11 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                     step="1"
                     value={rdYears}
                     onChange={(e) => setRdYears(parseInt(e.target.value))}
-                    className="w-full accent-indigo-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
+                    className="w-full accent-emerald-400 bg-white/10 h-1.5 rounded-lg cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-white/40">
+                  <div className="flex justify-between text-[10px] text-white/40 font-mono">
                     <span>1 Year</span>
+                    <span>5 Years</span>
                     <span>15 Years</span>
                   </div>
                 </div>
@@ -542,7 +578,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
           >
             {copied ? (
               <>
-                <Check size={16} className="text-indigo-400" />
+                <Check size={16} className="text-emerald-400" />
                 Copied plan!
               </>
             ) : (
@@ -556,7 +592,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
           <button
             id="investment-btn-save-trigger"
             onClick={() => setShowSaveModal(true)}
-            className="flex-1 py-2.5 accent-pill text-white font-bold rounded-xl hover:shadow-lg hover:shadow-indigo-500/25 transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-indigo-500/20 cursor-pointer"
+            className="flex-1 py-2.5 accent-pill text-white font-bold rounded-xl hover:shadow-lg hover:shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 text-sm shadow-lg shadow-emerald-500/20 cursor-pointer"
           >
             <Save size={16} />
             Save Calculation
@@ -566,35 +602,45 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
 
       {/* Visual results & Growth Chart */}
       <div className="lg:col-span-5 flex flex-col gap-6" id="investment-results-panel">
-        <div className="glass rounded-2xl p-6 shadow-xl" id="investment-out-cards">
-          <h4 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-4">Maturity Statistics</h4>
+        <div className="glass-creative rounded-2xl p-6 shadow-xl border border-white/10" id="investment-out-cards">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Maturity Statistics (INR)</h4>
+            <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded-full text-white/60">
+              Indian Units
+            </span>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="glass-dark rounded-xl p-4 border border-white/5">
               <span className="text-[11px] text-white/50 block mb-1">TOTAL INVESTED</span>
-              <span className="text-base font-extrabold text-white">{formatVal(investedAmount)}</span>
+              <span className="text-base font-extrabold text-white font-mono">{formatVal(investedAmount)}</span>
+              <span className="text-[10px] text-white/40 block mt-0.5">{formatIndianCompact(investedAmount)}</span>
             </div>
             <div className="glass-dark rounded-xl p-4 border border-white/5">
               <span className="text-[11px] text-white/50 block mb-1">EST. RETURNS</span>
-              <span className="text-base font-extrabold text-indigo-400">+{formatVal(estReturns)}</span>
+              <span className="text-base font-extrabold text-cyan-400 font-mono">+{formatVal(estReturns)}</span>
+              <span className="text-[10px] text-cyan-300/60 block mt-0.5">{formatIndianCompact(estReturns)}</span>
             </div>
           </div>
 
-          <div className="accent-pill rounded-xl p-4 mt-4 flex items-center justify-between shadow-lg shadow-indigo-500/25">
+          <div className="accent-pill rounded-xl p-4 mt-4 flex items-center justify-between shadow-lg shadow-emerald-500/25">
             <div>
-              <span className="text-[10px] text-white/75 uppercase font-bold tracking-wider block">ESTIMATED TOTAL VALUE</span>
-              <span className="text-xl font-black text-white">{formatVal(totalValue)}</span>
+              <span className="text-[10px] text-white/75 uppercase font-bold tracking-wider block">ESTIMATED TOTAL MATURITY</span>
+              <span className="text-xl font-black text-white font-mono">{formatVal(totalValue)}</span>
+              <span className="text-xs text-white/80 font-bold block mt-0.5">
+                {formatIndianCompact(totalValue)} ({numberToIndianWords(totalValue)} Rupees)
+              </span>
             </div>
-            <div className="p-2 bg-white/15 text-white rounded-lg">
-              <TrendingUp size={20} />
+            <div className="p-2.5 bg-white/15 text-white rounded-xl">
+              <TrendingUp size={22} />
             </div>
           </div>
         </div>
 
         {/* Wealth Accumulation Chart */}
-        <div className="glass rounded-2xl p-6 flex flex-col h-64 shadow-xl" id="investment-progress-chart">
+        <div className="glass-creative rounded-2xl p-6 flex flex-col h-72 shadow-xl border border-white/10" id="investment-progress-chart">
           <div className="flex items-center justify-between mb-4">
-            <h5 className="text-xs font-bold text-white/50 uppercase tracking-wider">Wealth Accumulation</h5>
+            <h5 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Wealth Accumulation (INR)</h5>
             <span className="text-[10px] glass-dark border border-white/5 px-2 py-0.5 rounded text-white/60 font-mono">Yearly Growth</span>
           </div>
           
@@ -604,24 +650,24 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorInvested" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#c084fc" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#c084fc" stopOpacity={0.05} />
+                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.05} />
                     </linearGradient>
                     <linearGradient id="colorReturns" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#818cf8" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#818cf8" stopOpacity={0.05} />
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="year" stroke="#94a3b8" tickFormatter={(v) => `Yr ${v}`} />
-                  <YAxis stroke="#94a3b8" tickFormatter={(v) => currency.symbol + (v / 1000 >= 1 ? `${v / 1000}k` : v)} />
+                  <YAxis stroke="#94a3b8" tickFormatter={(v) => formatIndianCompact(v)} />
                   <Tooltip
                     formatter={(value: number) => [formatVal(value), '']}
-                    contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(255, 255, 255, 0.1)', borderRadius: '12px' }}
+                    contentStyle={{ backgroundColor: 'rgba(3, 7, 18, 0.95)', borderColor: 'rgba(255, 255, 255, 0.1)', borderRadius: '12px' }}
                   />
                   <Legend wrapperStyle={{ fontSize: 10, paddingTop: 5 }} />
-                  <Area type="monotone" dataKey="invested" name="Invested Principal" stroke="#c084fc" fillOpacity={1} fill="url(#colorInvested)" stacked />
-                  <Area type="monotone" dataKey="returns" name="Interest / Wealth Gained" stroke="#818cf8" fillOpacity={1} fill="url(#colorReturns)" stacked />
+                  <Area type="monotone" dataKey="invested" name="Invested Principal" stroke="#06b6d4" fillOpacity={1} fill="url(#colorInvested)" stacked />
+                  <Area type="monotone" dataKey="returns" name="Returns / Interest" stroke="#10b981" fillOpacity={1} fill="url(#colorReturns)" stacked />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -635,17 +681,17 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
 
       {/* Save Modal */}
       {showSaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm px-4">
-          <div className="glass rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scaleIn">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="glass-creative rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/10 animate-scaleIn">
             <h3 className="text-lg font-bold text-white mb-2">Save Investment Calculation</h3>
             <p className="text-sm text-white/60 mb-4">Provide a name to save this {activeTab.toUpperCase()} planner configuration.</p>
             <input
               id="investment-save-name-input"
               type="text"
-              placeholder={`e.g. My Retirment SIP, 5Yr FD plan`}
+              placeholder={`e.g. My Retirement SIP, 5Yr SBI FD`}
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
-              className="w-full px-4 py-2.5 bg-black/20 border border-white/15 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 text-sm mb-6"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-xl text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-sm mb-6"
               autoFocus
             />
             <div className="flex gap-3 justify-end">
@@ -660,7 +706,7 @@ Total Maturity Value: ${formatVal(rdResult.maturityValue)}`;
                 id="investment-modal-save"
                 onClick={handleSave}
                 disabled={!saveName.trim()}
-                className="px-5 py-2 accent-pill text-white font-bold rounded-xl hover:shadow-lg hover:shadow-indigo-500/25 disabled:opacity-50 text-sm transition-all cursor-pointer"
+                className="px-5 py-2 accent-pill text-white font-bold rounded-xl hover:shadow-lg hover:shadow-emerald-500/25 disabled:opacity-50 text-sm transition-all cursor-pointer"
               >
                 Save
               </button>

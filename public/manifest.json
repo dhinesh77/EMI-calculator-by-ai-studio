@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "name": "EMI Calculator & Finance Planner",
+  "short_name": "EMI Planner",
+  "description": "Professional Indian EMI, Loan Comparison, SIP, FD, RD & GST Calculator with Amortization PDF Export by DDWORLDS.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#030712",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512 any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "productivity", "utilities"]
+}

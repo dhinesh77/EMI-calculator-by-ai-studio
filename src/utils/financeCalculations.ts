@@ -1,4 +1,4 @@
-import { AmortizationRow } from '../types';
+import { AmortizationRow, ExtraRepaymentConfig } from '../types';
 
 /**
  * Calculates the monthly Equal Monthly Installment (EMI)
@@ -13,12 +13,47 @@ export function calculateEMI(principal: number, annualRate: number, months: numb
 }
 
 /**
- * Generates an amortization schedule (monthly details)
+ * Checks whether an extra prepayment is scheduled for a given month number (1-indexed)
+ */
+export function isExtraPaymentDue(month: number, config?: ExtraRepaymentConfig): boolean {
+  if (!config || !config.enabled || config.amount <= 0 || month <= 0) return false;
+
+  switch (config.frequency) {
+    case 'monthly':
+      // Month on month repayment
+      return true;
+    case 'quarterly':
+      // Every 3 months
+      return month % 3 === 0;
+    case 'half_yearly':
+      // Every 6 months
+      return month % 6 === 0;
+    case 'annually':
+      // Every 12 months
+      return month % 12 === 0;
+    case 'custom': {
+      const cMonth = config.customMonth && config.customMonth > 0 ? config.customMonth : 1;
+      if (config.isRecurring) {
+        // If recurring check box is clicked, calculate on every Nth month
+        return month % cMonth === 0;
+      } else {
+        // If not recurring, calculate as one-time repayment only on month N
+        return month === cMonth;
+      }
+    }
+    default:
+      return false;
+  }
+}
+
+/**
+ * Generates an amortization schedule (monthly details) optionally considering extra repayment
  */
 export function generateMonthlyAmortizationSchedule(
   principal: number,
   annualRate: number,
-  months: number
+  months: number,
+  extraRepayment?: ExtraRepaymentConfig
 ): AmortizationRow[] {
   const schedule: AmortizationRow[] = [];
   if (principal <= 0 || months <= 0) return schedule;
@@ -29,39 +64,77 @@ export function generateMonthlyAmortizationSchedule(
   let totalInterestPaid = 0;
 
   for (let i = 1; i <= months; i++) {
+    if (remainingBalance <= 0.005) break;
+
     const interest = remainingBalance * r;
-    const principalPaid = emi - interest;
-    remainingBalance = Math.max(0, remainingBalance - principalPaid);
+    const normalPrincipal = emi - interest;
+
+    // Check if extra payment is due in this month
+    const extraDue = isExtraPaymentDue(i, extraRepayment);
+    const configuredExtra = extraDue && extraRepayment ? extraRepayment.amount : 0;
+
+    let actualPrincipalPaid = 0;
+    let actualExtraPaid = 0;
+    let totalPayment = 0;
+
+    if (remainingBalance + interest <= emi) {
+      // Regular EMI clears or exceeds the entire remaining balance + interest
+      totalPayment = remainingBalance + interest;
+      actualPrincipalPaid = remainingBalance;
+      actualExtraPaid = 0;
+      remainingBalance = 0;
+    } else {
+      // Normal principal is paid
+      const principalPortion = Math.min(remainingBalance, normalPrincipal);
+      const balanceAfterNormal = Math.max(0, remainingBalance - principalPortion);
+
+      if (configuredExtra > 0 && balanceAfterNormal > 0) {
+        // Apply extra prepayment against remaining balance
+        actualExtraPaid = Math.min(configuredExtra, balanceAfterNormal);
+      }
+
+      actualPrincipalPaid = principalPortion + actualExtraPaid;
+      totalPayment = interest + actualPrincipalPaid;
+      remainingBalance = Math.max(0, remainingBalance - actualPrincipalPaid);
+    }
+
     totalInterestPaid += interest;
 
     schedule.push({
       period: i,
-      payment: emi,
-      principal: Number(principalPaid.toFixed(2)),
+      payment: Number(totalPayment.toFixed(2)),
+      principal: Number(actualPrincipalPaid.toFixed(2)),
       interest: Number(interest.toFixed(2)),
-      remainingBalance: Number(remainingBalance.toFixed(2)),
+      remainingBalance: Number(Math.max(0, remainingBalance).toFixed(2)),
       totalInterestPaid: Number(totalInterestPaid.toFixed(2)),
+      extraPayment: actualExtraPaid > 0 ? Number(actualExtraPaid.toFixed(2)) : undefined,
     });
+
+    if (remainingBalance <= 0.005) {
+      break;
+    }
   }
 
   return schedule;
 }
 
 /**
- * Generates a yearly amortization schedule (aggregated)
+ * Generates a yearly amortization schedule (aggregated) optionally considering extra repayment
  */
 export function generateYearlyAmortizationSchedule(
   principal: number,
   annualRate: number,
-  months: number
+  months: number,
+  extraRepayment?: ExtraRepaymentConfig
 ): AmortizationRow[] {
-  const monthly = generateMonthlyAmortizationSchedule(principal, annualRate, months);
+  const monthly = generateMonthlyAmortizationSchedule(principal, annualRate, months, extraRepayment);
   const yearly: AmortizationRow[] = [];
   
   let yearNum = 1;
   let yearlyPayment = 0;
   let yearlyPrincipal = 0;
   let yearlyInterest = 0;
+  let yearlyExtra = 0;
   let lastBalance = principal;
 
   for (let i = 0; i < monthly.length; i++) {
@@ -69,6 +142,7 @@ export function generateYearlyAmortizationSchedule(
     yearlyPayment += row.payment;
     yearlyPrincipal += row.principal;
     yearlyInterest += row.interest;
+    if (row.extraPayment) yearlyExtra += row.extraPayment;
     lastBalance = row.remainingBalance;
 
     if ((i + 1) % 12 === 0 || i === monthly.length - 1) {
@@ -79,15 +153,87 @@ export function generateYearlyAmortizationSchedule(
         interest: Number(yearlyInterest.toFixed(2)),
         remainingBalance: Number(lastBalance.toFixed(2)),
         totalInterestPaid: Number(monthly[i].totalInterestPaid.toFixed(2)),
+        extraPayment: yearlyExtra > 0 ? Number(yearlyExtra.toFixed(2)) : undefined,
       });
       yearNum++;
       yearlyPayment = 0;
       yearlyPrincipal = 0;
       yearlyInterest = 0;
+      yearlyExtra = 0;
     }
   }
 
   return yearly;
+}
+
+export interface ExtraRepaymentImpact {
+  originalTenureMonths: number;
+  actualTenureMonths: number;
+  monthsSaved: number;
+  originalTotalInterest: number;
+  actualTotalInterest: number;
+  interestSaved: number;
+  originalTotalPayment: number;
+  actualTotalPayment: number;
+  totalExtraPaid: number;
+}
+
+/**
+ * Calculates comparative metrics between standard schedule and extra repayment schedule
+ */
+export function calculateExtraRepaymentImpact(
+  principal: number,
+  annualRate: number,
+  months: number,
+  extraRepayment?: ExtraRepaymentConfig
+): ExtraRepaymentImpact {
+  const emi = calculateEMI(principal, annualRate, months);
+  const baselineSchedule = generateMonthlyAmortizationSchedule(principal, annualRate, months);
+  const baselineTotalInterest = baselineSchedule.length > 0
+    ? baselineSchedule[baselineSchedule.length - 1].totalInterestPaid
+    : Math.max(0, emi * months - principal);
+  const baselineTotalPayment = principal + baselineTotalInterest;
+
+  if (!extraRepayment || !extraRepayment.enabled || extraRepayment.amount <= 0) {
+    return {
+      originalTenureMonths: months,
+      actualTenureMonths: months,
+      monthsSaved: 0,
+      originalTotalInterest: Number(baselineTotalInterest.toFixed(2)),
+      actualTotalInterest: Number(baselineTotalInterest.toFixed(2)),
+      interestSaved: 0,
+      originalTotalPayment: Number(baselineTotalPayment.toFixed(2)),
+      actualTotalPayment: Number(baselineTotalPayment.toFixed(2)),
+      totalExtraPaid: 0,
+    };
+  }
+
+  const newSchedule = generateMonthlyAmortizationSchedule(principal, annualRate, months, extraRepayment);
+  const actualMonths = newSchedule.length;
+  const actualTotalInterest = actualMonths > 0
+    ? newSchedule[actualMonths - 1].totalInterestPaid
+    : 0;
+
+  let totalExtraPaid = 0;
+  for (const row of newSchedule) {
+    if (row.extraPayment) totalExtraPaid += row.extraPayment;
+  }
+
+  const actualTotalPayment = principal + actualTotalInterest;
+  const interestSaved = Math.max(0, baselineTotalInterest - actualTotalInterest);
+  const monthsSaved = Math.max(0, months - actualMonths);
+
+  return {
+    originalTenureMonths: months,
+    actualTenureMonths: actualMonths,
+    monthsSaved,
+    originalTotalInterest: Number(baselineTotalInterest.toFixed(2)),
+    actualTotalInterest: Number(actualTotalInterest.toFixed(2)),
+    interestSaved: Number(interestSaved.toFixed(2)),
+    originalTotalPayment: Number(baselineTotalPayment.toFixed(2)),
+    actualTotalPayment: Number(actualTotalPayment.toFixed(2)),
+    totalExtraPaid: Number(totalExtraPaid.toFixed(2)),
+  };
 }
 
 /**

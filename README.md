@@ -1,20 +1,47 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# EMI Calculator & Finance Planner
 
-# Run and deploy your AI Studio app
+**Designed & Developed by DDWORLDS**
 
-This contains everything you need to run your app locally.
+A comprehensive Indian Financial & EMI Planner supporting:
+- **EMI Calculator** with Advanced Extra Repayments (Monthly, Quarterly, Half-Yearly, Annually, and Custom Recurring/One-time months)
+- **Side-by-Side Loan Comparison**
+- **SIP, FD, and RD Investment Calculators**
+- **GST Calculator** (Inclusive & Exclusive with CGST/SGST split)
+- **Professional PDF Amortization Schedule Export** with DDWORLDS branding
+- **100% Offline-Ready Progressive Web App (PWA)**
 
-View your app in AI Studio: https://ai.studio/apps/16fe0bdd-0265-4ec7-bc39-ca9fd56ff64a
+---
 
-## Run Locally
+## 📱 How to Download the Android `.APK` from GitHub
 
-**Prerequisites:**  Node.js
+This repository is pre-configured with an automated **GitHub Actions Android APK Builder** (`.github/workflows/build-apk.yml`).
 
+1. After pushing this repository to GitHub, click on the **Actions** tab at the top of your GitHub repository.
+2. Click on the **Build Android APK** workflow on the left sidebar.
+3. Click on the latest completed workflow run (or click **Run workflow** to trigger one manually).
+4. Scroll down to the **Artifacts** section at the bottom of the summary page.
+5. Click **`EMI-Planner-DDWORLDS-APK`** to download your compiled Android `.apk` package!
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+---
+
+## 🌐 Live Public PWA (GitHub Pages)
+
+1. In your GitHub repository, go to **Settings → Pages**.
+2. Under **Build and deployment → Source**, select **GitHub Actions**.
+3. Your live app will automatically deploy to `https://<your-github-username>.github.io/<repo-name>/`.
+4. You can open this link directly on Android/iOS to install the PWA or paste it into [PWABuilder.com](https://www.pwabuilder.com).
+
+---
+
+## 💻 Local Development
+
+```bash
+npm install
+npm run dev
+```
+
+Build for production:
+
+```bash
+npm run build
+```
